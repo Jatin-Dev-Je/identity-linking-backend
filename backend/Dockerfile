@@ -1,39 +1,43 @@
-# Use Node.js 18 Alpine for smaller image size
-FROM node:18-alpine
-
-# Set working directory
+# Stage 1: Build
+FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Generate Prisma client
-RUN npx prisma generate
+# Install all dependencies (including devDependencies)
+RUN npm install
 
 # Copy source code
 COPY . .
 
-# Build the application
+# Generate Prisma client and build the application
+RUN npx prisma generate
 RUN npm run build
+
+# Stage 2: Production
+FROM node:18-alpine
+WORKDIR /app
+
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Copy built code and necessary files from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/healthcheck.js ./healthcheck.js
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodejs -u 1001
-
-# Change ownership of the app directory
 RUN chown -R nodejs:nodejs /app
 USER nodejs
 
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js
 
-# Start the application
 CMD ["npm", "start"]
