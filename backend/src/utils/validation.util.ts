@@ -47,17 +47,17 @@ export class InputValidator {
     const [localPart, domainPart] = parts;
 
     // Check local part (before @)
-    if (localPart.length > 64) {
+    if (localPart && localPart.length > 64) {
       return { isValid: false, error: 'Email local part must be less than 64 characters' };
     }
 
     // Check domain part (after @)
-    if (domainPart.length > 253) {
+    if (domainPart && domainPart.length > 253) {
       return { isValid: false, error: 'Email domain part must be less than 253 characters' };
     }
 
     // Check for valid domain structure
-    const domainParts = domainPart.split('.');
+    const domainParts = domainPart ? domainPart.split('.') : [];
     if (domainParts.length < 2 || domainParts.some(part => part.length === 0)) {
       return { isValid: false, error: 'Invalid domain format' };
     }

@@ -1,4 +1,3 @@
-import { Contact } from '@prisma/client';
 import prisma from '../config/db.config';
 import { IdentifyRequest, ConsolidatedContact } from '../models/contact.model';
 
@@ -49,7 +48,7 @@ export class IdentityProvider {
   /**
    * Find existing contacts with matching email or phone number
    */
-  private async findExistingContacts(email?: string, phoneNumber?: string): Promise<Contact[]> {
+  private async findExistingContacts(email?: string, phoneNumber?: string): Promise<any[]> {
     if (!email && !phoneNumber) {
       return [];
     }
@@ -70,7 +69,7 @@ export class IdentityProvider {
   /**
    * Group contacts by their primary contact
    */
-  private async groupContactsByPrimary(contacts: Contact[]): Promise<Contact[][]> {
+  private async groupContactsByPrimary(contacts: any[]): Promise<any[][]> {
     const primaryIds = new Set<number>();
     
     // Collect all primary IDs
@@ -83,7 +82,7 @@ export class IdentityProvider {
     }
 
     // Fetch complete contact groups
-    const groups: Contact[][] = [];
+    const groups: any[][] = [];
     for (const primaryId of primaryIds) {
       const groupContacts = await this.getContactGroup(primaryId);
       groups.push(groupContacts);
@@ -95,7 +94,7 @@ export class IdentityProvider {
   /**
    * Get all contacts in a group (primary + all secondaries)
    */
-  private async getContactGroup(primaryId: number): Promise<Contact[]> {
+  private async getContactGroup(primaryId: number): Promise<any[]> {
     const primary = await prisma.contact.findUnique({
       where: { id: primaryId, deletedAt: null },
     });
@@ -111,7 +110,7 @@ export class IdentityProvider {
   /**
    * Check if we need to create a new secondary contact
    */
-  private shouldCreateSecondaryContact(contacts: Contact[], email?: string, phoneNumber?: string): boolean {
+  private shouldCreateSecondaryContact(contacts: any[], email?: string, phoneNumber?: string): boolean {
     // Check if this exact combination already exists
     const exactMatch = contacts.some(contact => 
       contact.email === (email || null) && contact.phoneNumber === (phoneNumber || null)
@@ -131,7 +130,7 @@ export class IdentityProvider {
   /**
    * Create a new primary contact
    */
-  private async createPrimaryContact(email?: string, phoneNumber?: string): Promise<Contact> {
+  private async createPrimaryContact(email?: string, phoneNumber?: string): Promise<any> {
     return await prisma.contact.create({
       data: {
         email: email || null,
@@ -144,7 +143,7 @@ export class IdentityProvider {
   /**
    * Create a new secondary contact
    */
-  private async createSecondaryContact(email?: string, phoneNumber?: string, linkedId?: number): Promise<Contact> {
+  private async createSecondaryContact(email?: string, phoneNumber?: string, linkedId?: number): Promise<any> {
     return await prisma.contact.create({
       data: {
         email: email || null,
@@ -158,11 +157,11 @@ export class IdentityProvider {
   /**
    * Merge multiple contact groups when they should be linked
    */
-  private async mergeContactGroups(groups: Contact[][], email?: string, phoneNumber?: string): Promise<ConsolidatedContact> {
+  private async mergeContactGroups(groups: any[][], email?: string, phoneNumber?: string): Promise<ConsolidatedContact> {
     // Find the oldest primary contact (will remain primary)
     const primaries = groups
       .map(group => group.find(c => c.linkPrecedence === 'primary'))
-      .filter((p): p is Contact => p !== undefined);
+      .filter((p): p is any => p !== undefined);
     
     if (primaries.length === 0) {
       throw new Error('No primary contacts found in groups');
@@ -171,7 +170,7 @@ export class IdentityProvider {
     const oldestPrimary = primaries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0]!;
 
     // Collect all contacts and update non-primary groups
-    const allContacts: Contact[] = [];
+    const allContacts: any[] = [];
     
     for (const group of groups) {
       const primary = group.find(c => c.linkPrecedence === 'primary');
@@ -225,7 +224,7 @@ export class IdentityProvider {
   /**
    * Build the consolidated contact response
    */
-  private buildConsolidatedContact(contacts: Contact[]): ConsolidatedContact {
+  private buildConsolidatedContact(contacts: any[]): ConsolidatedContact {
     const primary = contacts.find(c => c.linkPrecedence === 'primary');
     if (!primary) {
       throw new Error('Primary contact not found');
