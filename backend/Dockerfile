@@ -1,9 +1,6 @@
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:18 AS builder
 WORKDIR /app
-
-# Install OpenSSL 1.1 compatibility
-RUN apk add --no-cache openssl1.1-compat
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -19,11 +16,8 @@ RUN npx prisma generate
 RUN npm run build
 
 # Stage 2: Production
-FROM node:18-alpine
+FROM node:18
 WORKDIR /app
-
-# Install OpenSSL 1.1 compatibility
-RUN apk add --no-cache openssl1.1-compat
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -36,8 +30,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/healthcheck.js ./healthcheck.js
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+RUN addgroup --gid 1001 nodejs
+RUN adduser --uid 1001 --gid 1001 --disabled-password nodejs
 RUN chown -R nodejs:nodejs /app
 USER nodejs
 
