@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { IdentityProvider } from '../providers/identity.provider';
 import { IdentifyRequest } from '../models/contact.model';
 import { createSuccessResponse, createErrorResponse } from '../utils/response.util';
+import { InputValidator } from '../utils/validation.util';
 
 export class IdentityController {
   private identityProvider: IdentityProvider;
@@ -15,33 +16,19 @@ export class IdentityController {
    */
   public identify = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { email, phoneNumber }: IdentifyRequest = req.body;
-
-      // Validate input
-      if (!email && !phoneNumber) {
+      // Comprehensive validation and sanitization
+      const validation = InputValidator.validateIdentifyRequest(req.body);
+      
+      if (!validation.isValid) {
         res.status(400).json(
-          createErrorResponse('At least one of email or phoneNumber must be provided')
+          createErrorResponse(`Validation failed: ${validation.errors.join(', ')}`)
         );
         return;
       }
 
-      // Validate email format if provided
-      if (email && !this.isValidEmail(email)) {
-        res.status(400).json(
-          createErrorResponse('Invalid email format')
-        );
-        return;
-      }
+      const { email, phoneNumber } = validation.sanitizedData!;
 
-      // Validate phone number format if provided
-      if (phoneNumber && !this.isValidPhoneNumber(phoneNumber)) {
-        res.status(400).json(
-          createErrorResponse('Invalid phone number format')
-        );
-        return;
-      }
-
-      // Process identity reconciliation
+      // Process identity reconciliation with sanitized data
       const consolidatedContact = await this.identityProvider.identifyContact({
         email,
         phoneNumber,
@@ -56,6 +43,26 @@ export class IdentityController {
 
     } catch (error) {
       console.error('Error in identify controller:', error);
+      
+      // Handle specific error types
+      if (error instanceof Error) {
+        // Check for database connection errors
+        if (error.message.includes('connect') || error.message.includes('connection')) {
+          res.status(503).json(
+            createErrorResponse('Database connection error. Please try again later.')
+          );
+          return;
+        }
+        
+        // Check for validation errors from provider
+        if (error.message.includes('validation') || error.message.includes('invalid')) {
+          res.status(400).json(
+            createErrorResponse(error.message)
+          );
+          return;
+        }
+      }
+      
       res.status(500).json(
         createErrorResponse('Internal server error')
       );
@@ -67,11 +74,23 @@ export class IdentityController {
    */
   public healthCheck = async (req: Request, res: Response): Promise<void> => {
     try {
+      // Test database connection if using real Prisma
+      let dbStatus = 'connected';
+      try {
+        // Simple database test - this will work with both mock and real database
+        await this.identityProvider.testConnection();
+      } catch (dbError) {
+        dbStatus = 'disconnected';
+        console.warn('Database connection test failed:', dbError);
+      }
+
       res.status(200).json(
         createSuccessResponse('Service is healthy', {
           timestamp: new Date().toISOString(),
           service: 'Bitespeed Identity Service',
-          version: '1.0.0'
+          version: '1.0.0',
+          database: dbStatus,
+          environment: process.env.NODE_ENV || 'development'
         })
       );
     } catch (error) {
@@ -81,21 +100,4 @@ export class IdentityController {
       );
     }
   };
-
-  /**
-   * Validate email format
-   */
-  private isValidEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }
-
-  /**
-   * Validate phone number format
-   */
-  private isValidPhoneNumber(phoneNumber: string): boolean {
-    // Allow various phone number formats
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
-    return phoneRegex.test(phoneNumber) && phoneNumber.replace(/\D/g, '').length >= 6;
-  }
 }
